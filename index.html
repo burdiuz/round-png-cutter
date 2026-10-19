@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round PNG Cutter</title>
+<style>
+  :root {
+    --bg: #f4f4f6; --fg: #1d1d22; --muted: #6b6b76; --card: #fff; --accent: #3b6cf6; --border: #c9c9d3;
+    --c1: #ddd; --c2: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #17171b; --fg: #ececf1; --muted: #9a9aa6; --card: #222228; --accent: #6b8cff; --border: #44444f; --c1: #333; --c2: #3d3d3d; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--fg); font: 16px/1.4 system-ui, sans-serif;
+         display: flex; flex-direction: column; align-items: center; padding: 24px 16px; gap: 16px; }
+  h1 { font-size: 1.25rem; margin: 0; }
+  #drop { width: min(100%, 640px); min-height: 160px; border: 2px dashed var(--border); border-radius: 12px; background: var(--card);
+          display: flex; align-items: center; justify-content: center; text-align: center; color: var(--muted); cursor: pointer; padding: 16px; }
+  #drop.over { border-color: var(--accent); color: var(--accent); }
+  #result { display: none; flex-direction: column; align-items: center; gap: 12px; width: min(100%, 640px); }
+  .checker { background-image: linear-gradient(45deg, var(--c1) 25%, transparent 25%, transparent 75%, var(--c1) 75%),
+                               linear-gradient(45deg, var(--c1) 25%, var(--c2) 25%, var(--c2) 75%, var(--c1) 75%);
+             background-size: 20px 20px; background-position: 0 0, 10px 10px; border-radius: 8px; line-height: 0; max-width: 100%; }
+  canvas { max-width: 100%; height: auto; max-height: 70vh; }
+  .row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; justify-content: center; }
+  button { font: inherit; background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 10px 18px; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--fg); border: 1px solid var(--border); }
+  #info { color: var(--muted); font-size: .875rem; }
+</style>
+</head>
+<body>
+  <h1>Round PNG Cutter</h1>
+  <div id="drop" tabindex="0">Drop an image here, paste it (Ctrl/⌘+V), or click to choose<br>PNG · JPEG · WEBP</div>
+  <input id="file" type="file" accept="image/*" hidden>
+
+  <div id="result">
+    <div class="checker"><canvas id="canvas"></canvas></div>
+    <div id="info"></div>
+    <div class="row">
+      <button id="download">Download PNG</button>
+      <button id="reset" class="secondary">New image</button>
+    </div>
+  </div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const drop = $('drop'), fileInput = $('file'), result = $('result'), canvas = $('canvas'), ctx = canvas.getContext('2d');
+  let img = null, baseName = 'image';
+
+  // Circle is centered, diameter = shorter side (always a circle, never an ellipse).
+  function render() {
+    const w = img.naturalWidth, h = img.naturalHeight, d = Math.min(w, h);
+    canvas.width = d;
+    canvas.height = d;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const cx = canvas.width / 2, cy = canvas.height / 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, d / 2, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(img, (canvas.width - w) / 2, (canvas.height - h) / 2);
+    ctx.restore();
+    $('info').textContent = `${d} × ${d}px`;
+  }
+
+  function load(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    baseName = (file.name || 'image').replace(/\.[^.]+$/, '') || 'image';
+    const url = URL.createObjectURL(file);
+    const i = new Image();
+    i.onload = () => {
+      img = i;
+      drop.style.display = 'none';
+      result.style.display = 'flex';
+      render();
+      URL.revokeObjectURL(url);
+    };
+    i.onerror = () => { URL.revokeObjectURL(url); alert('Could not read this image.'); };
+    i.src = url;
+  }
+
+  drop.addEventListener('click', () => fileInput.click());
+  drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+  fileInput.addEventListener('change', () => { load(fileInput.files[0]); fileInput.value = ''; });
+  window.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+  window.addEventListener('dragleave', () => drop.classList.remove('over'));
+  window.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); load(e.dataTransfer.files[0]); });
+  window.addEventListener('paste', (e) => {
+    const f = [...(e.clipboardData?.files || [])].find((f) => f.type.startsWith('image/'));
+    if (f) load(f);
+  });
+  $('reset').addEventListener('click', () => { img = null; result.style.display = 'none'; drop.style.display = 'flex'; });
+  $('download').addEventListener('click', () => {
+    canvas.toBlob((blob) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${baseName}-round.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }, 'image/png');
+  });
+</script>
+</body>
+</html>
